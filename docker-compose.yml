@@ -1,0 +1,164 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: insightgenie_postgres
+    environment:
+      POSTGRES_DB: insightgenie
+      POSTGRES_USER: insightgenie
+      POSTGRES_PASSWORD: changeme
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U insightgenie"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB
+  mongodb:
+    image: mongo:7.0
+    container_name: insightgenie_mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: insightgenie
+      MONGO_INITDB_ROOT_PASSWORD: changeme
+      MONGO_INITDB_DATABASE: insightgenie
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/insightgenie --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: insightgenie_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis_data:/data
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: insightgenie_backend
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+      DATABASE_URL: postgresql+asyncpg://insightgenie:changeme@postgres:5432/insightgenie
+      MONGODB_URL: mongodb://insightgenie:changeme@mongodb:27017/insightgenie
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      GENIE_API_KEY: "your-api-key"
+      GENIE_API_BASE_URL: https://api.genie.com
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - ./logs:/app/logs
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Celery Worker
+  celery_worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: insightgenie_celery
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://insightgenie:changeme@postgres:5432/insightgenie
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+      - ./logs:/app/logs
+    command: celery -A app.tasks worker -l info
+
+  # Middleware Layer (API Gateway)
+  middleware:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.middleware
+    container_name: insightgenie_middleware
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+      BACKEND_URL: http://backend:8000
+      MIDDLEWARE_HOST: 0.0.0.0
+      MIDDLEWARE_PORT: 8001
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: your-secret-key-change-in-production
+      LOG_LEVEL: INFO
+    ports:
+      - "8001:8001"
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./middleware:/app
+      - ./logs:/app/logs
+    command: python -m uvicorn src.middleware:create_middleware_app --host 0.0.0.0 --port 8001 --reload
+    networks:
+      - insightgenie_network
+
+  # Frontend (Streamlit)
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: insightgenie_frontend
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+      BACKEND_URL: http://middleware:8001
+      STREAMLIT_SERVER_PORT: 8501
+      STREAMLIT_SERVER_ADDRESS: 0.0.0.0
+      LOG_LEVEL: INFO
+    ports:
+      - "8501:8501"
+    depends_on:
+      middleware:
+        condition: service_started
+    volumes:
+      - ./frontend:/app
+      - ./logs:/app/logs
+    command: streamlit run src/main.py --server.port 8501 --server.address 0.0.0.0 --logger.level=info
+    networks:
+      - insightgenie_network
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  redis_data:
+
+networks:
+  insightgenie_network:
+    name: insightgenie_network
+    driver: bridge
