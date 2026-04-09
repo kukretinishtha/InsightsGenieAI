@@ -3,31 +3,45 @@ Geopolitical risks page module.
 """
 
 import streamlit as st
-
-from utils import APIClient, get_api_client, run_async
+import pandas as pd
+import plotly.express as px
 
 
 def render():
     """Render geopolitical risks page."""
     st.title("🌍 Geopolitical Risks")
+    st.markdown("Track global geopolitical events and market impact.")
 
-    st.markdown(
-        "Track global geopolitical events and assess their impact on "
-        "Indian market and your investments."
-    )
+    view_type = st.radio("View Type", ["Global Events", "Country Risk", "Stock Impact"], horizontal=True)
 
-    col1, col2 = st.columns(2)
+    if view_type == "Global Events":
+        st.subheader("Recent Global Events")
+        events = pd.DataFrame({
+            'Event': ['China Trade Tensions', 'Middle East Oil Crisis', 'US GDP Growth Slowdown'],
+            'Risk Level': ['High', 'Medium', 'Medium'],
+            'Impact': ['₹2.5L Cr', '₹1.2L Cr', '₹890 Cr']
+        })
+        st.dataframe(events, use_container_width=True)
+    
+    elif view_type == "Country Risk":
+        st.subheader("Country Risk Assessment")
+        risk_data = pd.DataFrame({
+            'Country': ['China', 'USA', 'Russia', 'Middle East', 'EU'],
+            'Risk Score': [7.2, 5.8, 8.1, 6.5, 4.2],
+            'Trend': ['↑', '↓', '↑', '→', '↓']
+        })
+        st.dataframe(risk_data, use_container_width=True)
+        
+        fig = px.bar(risk_data, x='Country', y='Risk Score', title='Country Risk Levels', color_continuous_scale='RdYlGn_r')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    else:  # Stock Impact
+        st.subheader("Stock Impact Analysis")
+        st.info("🔴 High Risk Stocks: HDFC Bank, NTPC (Energy dependent)")
+        st.warning("🟡 Medium Risk: TCS, INFY (IT sector stable)")
+        st.success("🟢 Low Risk: Pharma, FMCG stocks unaffected")
 
-    with col1:
-        view_type = st.radio(
-            "View Type",
-            ["Global Events", "Country Risk", "Stock Impact"],
-            horizontal=True,
-        )
-
-    with col2:
-        if st.button("🔄 Refresh Data", use_container_width=True):
-            st.rerun()
+        st.rerun()
 
     st.markdown("---")
 

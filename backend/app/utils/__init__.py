@@ -1,1 +1,1 @@
-"""Utility modules for InsightGenie AI application."""\n
+"""Utility modules for InsightGenie AI application."""

@@ -3,7 +3,9 @@ Pages package initialization.
 """
 
 from . import (
+    analysis,
     comparison_analysis,
+    data_pipeline,
     geopolitical_risks,
     home,
     news_analysis,
@@ -20,4 +22,6 @@ __all__ = [
     "geopolitical_risks",
     "comparison_analysis",
     "real_time_monitor",
+    "data_pipeline",
+    "analysis",
 ]

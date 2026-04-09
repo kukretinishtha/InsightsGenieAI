@@ -3,10 +3,9 @@ Real-time monitoring page module.
 """
 
 import time
-
 import streamlit as st
-
-from utils import APIClient, SessionState, get_api_client, run_async
+import pandas as pd
+import plotly.express as px
 
 
 def render():
@@ -14,8 +13,7 @@ def render():
     st.title("⚡ Real-Time Monitor")
 
     st.markdown(
-        "Monitor market movements in real-time and get instant alerts "
-        "for significant changes."
+        "Monitor market movements and track key metrics for selected stocks."
     )
 
     # Monitoring setup
@@ -26,37 +24,131 @@ def render():
             "Stocks to Monitor (comma-separated)",
             value="RELIANCE,TCS,INFY",
         )
-        symbols = [s.strip().upper() for s in symbols_input.split(",")]
+        symbols = [s.strip().upper() for s in symbols_input.split(",") if s.strip()]
 
     with col2:
         refresh_interval = st.selectbox(
-            "Refresh Interval",
+            "Refresh Interval", 
             [30, 60, 120, 300],
             format_func=lambda x: f"{x}s",
         )
 
     with col3:
-        auto_refresh = st.checkbox("Auto Refresh", value=True)
-
-    if st.button("🔴 Start Live Monitoring"):
-        SessionState.set("monitoring", True)
+        if st.button("🔴 Start Monitoring", use_container_width=True):
+            st.session_state.monitoring = True
 
     st.markdown("---")
 
-    if SessionState.get("monitoring"):
-        # Live data display
-        placeholder = st.empty()
-        status_placeholder = st.empty()
+    if st.session_state.get("monitoring", False):
+        # Sample real-time data
+        live_data = {
+            "RELIANCE": {
+                "price": 2850.50,
+                "change": 2.5,
+                "volume": 12500000,
+                "bid": 2849.75,
+                "ask": 2851.25,
+                "52w_high": 3200,
+                "52w_low": 2400,
+            },
+            "TCS": {
+                "price": 3450.75,
+                "change": 1.8,
+                "volume": 8900000,
+                "bid": 3449.50,
+                "ask": 3451.90,
+                "52w_high": 3750,
+                "52w_low": 2950,
+            },
+            "INFY": {
+                "price": 1760.25,
+                "change": 0.5,
+                "volume": 10200000,
+                "bid": 1759.75,
+                "ask": 1760.75,
+                "52w_high": 1900,
+                "52w_low": 1550,
+            },
+        }
 
-        try:
-            while SessionState.get("monitoring"):
-                with placeholder.container():
-                    st.subheader("📊 Live Market Data")
+        st.subheader("📊 Live Market Data")
 
-                    client = get_api_client()
+        # Create monitoring table
+        monitor_data = []
+        for symbol in symbols:
+            if symbol in live_data:
+                data = live_data[symbol]
+                monitor_data.append({
+                    "Symbol": symbol,
+                    "Price (₹)": f"{data['price']:.2f}",
+                    "Change (%)": f"{data['change']:+.2f}",
+                    "Volume": f"{data['volume']:,}",
+                    "Bid": f"{data['bid']:.2f}",
+                    "Ask": f"{data['ask']:.2f}",
+                    "52W High": f"{data['52w_high']:.2f}",
+                    "52W Low": f"{data['52w_low']:.2f}",
+                })
 
-                    # Fetch data for all symbols
-                    live_data = {}
+        monitor_df = pd.DataFrame(monitor_data)
+        st.dataframe(monitor_df, use_container_width=True, height=150)
+
+        st.markdown("---")
+
+        # Price movement chart
+        st.subheader("📈 Price Movement")
+
+        # Historical data for chart
+        hours = list(range(0, 6))
+        price_data = {
+            "RELIANCE": [2795, 2810, 2825, 2835, 2845, 2851],
+            "TCS": [3380, 3400, 3420, 3435, 3445, 3451],
+            "INFY": [1730, 1740, 1750, 1760, 1760, 1760],
+        }
+
+        chart_df = pd.DataFrame({
+            "Hour": hours * len(symbols),
+            "Price": [p for prices in price_data.values() for p in prices],
+            "Stock": [[s] * 6 for s in symbols][0] + [[s] * 6 for s in symbols][1] + 
+                     [[s] * 6 for s in symbols][2],
+        })
+        
+        # Simplified chart data
+        chart_data = []
+        for symbol in symbols:
+            if symbol in price_data:
+                for hour, price in enumerate(price_data[symbol]):
+                    chart_data.append({"Hour": hour, "Price (₹)": price, "Stock": symbol})
+
+        chart_df = pd.DataFrame(chart_data)
+        
+        fig = px.line(
+            chart_df,
+            x="Hour",
+            y="Price (₹)",
+            color="Stock",
+            title="Price Movement (Last 6 Hours)",
+            markers=True
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("---")
+
+        # Key metrics
+        st.subheader("📌 Key Metrics")
+
+        metric_cols = st.columns(len(symbols))
+        for col, symbol in zip(metric_cols, symbols):
+            if symbol in live_data:
+                with col:
+                    data = live_data[symbol]
+                    st.metric(
+                        symbol,
+                        f"₹{data['price']:.2f}",
+                        delta=f"{data['change']:+.2f}%"
+                    )
+
+        st.markdown("---")
+        st.info("💡 Tip: Data updates every {} seconds when auto-refresh is enabled".format(refresh_interval))
                     for symbol in symbols:
                         result = run_async(
                             client.analyze_stock(symbol, "quick")

@@ -1,1 +1,1 @@
-"""Unit tests."""\n
+"""Unit tests."""

@@ -1,1 +1,1 @@
-"""Integration tests."""\n
+"""Integration tests."""

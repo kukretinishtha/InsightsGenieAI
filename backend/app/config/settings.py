@@ -67,6 +67,14 @@ class Settings(BaseSettings):
     SENTRY_DSN: Optional[str] = Field(default=None, env="SENTRY_DSN")
     ENABLE_METRICS: bool = Field(default=True, env="ENABLE_METRICS")
     
+    # Databricks Configuration
+    DATABRICKS_HOST: str = Field(default="", env="DATABRICKS_HOST")
+    DATABRICKS_TOKEN: str = Field(default="", env="DATABRICKS_TOKEN")
+    DATABRICKS_CATALOG: str = Field(default="default", env="DATABRICKS_CATALOG")
+    DATABRICKS_SCHEMA: str = Field(default="default", env="DATABRICKS_SCHEMA")
+    DATABRICKS_WAREHOUSE_ID: Optional[str] = Field(default=None, env="DATABRICKS_WAREHOUSE_ID")
+    ENABLE_DATABRICKS: bool = Field(default=False, env="ENABLE_DATABRICKS")
+    
     @validator("CORS_ORIGINS", pre=True)
     def parse_cors_origins(cls, v):
         if isinstance(v, str):

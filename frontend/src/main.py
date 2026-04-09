@@ -13,7 +13,9 @@ from PIL import Image
 
 from config import get_settings, setup_logging
 from pages import (
+    analysis,
     comparison_analysis,
+    data_pipeline,
     geopolitical_risks,
     home,
     news_analysis,
@@ -93,6 +95,8 @@ def main():
                 "🌍 Geopolitical Risks",
                 "📊 Comparison Analysis",
                 "⚡ Real-Time Monitor",
+                "🔄 Data Pipeline",
+                "🤖 AI Analysis",
             ],
         )
 
@@ -141,6 +145,10 @@ def main():
         comparison_analysis.render()
     elif page == "⚡ Real-Time Monitor":
         real_time_monitor.render()
+    elif page == "🔄 Data Pipeline":
+        data_pipeline.render()
+    elif page == "🤖 AI Analysis":
+        analysis.render()
 
 
 if __name__ == "__main__":

@@ -1,1 +1,1 @@
-"""Backend scripts and utilities."""\n
+"""Backend scripts and utilities."""

@@ -57,15 +57,25 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     container_name: insightgenie_backend
+    restart: unless-stopped
     environment:
       ENVIRONMENT: development
       DEBUG: "true"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      WATCHFILES_FORCE_POLLING: "true"
       DATABASE_URL: postgresql+asyncpg://insightgenie:changeme@postgres:5432/insightgenie
       MONGODB_URL: mongodb://insightgenie:changeme@mongodb:27017/insightgenie
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       GENIE_API_KEY: "your-api-key"
       GENIE_API_BASE_URL: https://api.genie.com
+      DATABRICKS_HOST: "https://dbc-36bc98b3-ea38.cloud.databricks.com"
+      DATABRICKS_TOKEN: "databricks-token"
+      DATABRICKS_CATALOG: "default"
+      DATABRICKS_SCHEMA: "default"
+      ENABLE_DATABRICKS: "true"
+      DATABRICKS_WAREHOUSE_ID: "databricks-warehouse-id"
     ports:
       - "8000:8000"
     depends_on:
@@ -78,7 +88,9 @@ services:
     volumes:
       - ./backend:/app
       - ./logs:/app/logs
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-delay 0.5 --reload-dir /app/app --reload-dir /app/requirements.txt
+    networks:
+      - insightgenie_network
 
   # Celery Worker
   celery_worker:
@@ -86,6 +98,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     container_name: insightgenie_celery
+    restart: unless-stopped
     environment:
       ENVIRONMENT: development
       DATABASE_URL: postgresql+asyncpg://insightgenie:changeme@postgres:5432/insightgenie
@@ -98,6 +111,8 @@ services:
       - ./backend:/app
       - ./logs:/app/logs
     command: celery -A app.tasks worker -l info
+    networks:
+      - insightgenie_network
 
   # Middleware Layer (API Gateway)
   middleware:
@@ -105,9 +120,13 @@ services:
       context: .
       dockerfile: docker/Dockerfile.middleware
     container_name: insightgenie_middleware
+    restart: unless-stopped
     environment:
       ENVIRONMENT: development
       DEBUG: "true"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      WATCHFILES_FORCE_POLLING: "true"
       BACKEND_URL: http://backend:8000
       MIDDLEWARE_HOST: 0.0.0.0
       MIDDLEWARE_PORT: 8001
@@ -124,7 +143,7 @@ services:
     volumes:
       - ./middleware:/app
       - ./logs:/app/logs
-    command: python -m uvicorn src.middleware:create_middleware_app --host 0.0.0.0 --port 8001 --reload
+    command: python -m uvicorn src.middleware:create_middleware_app --host 0.0.0.0 --port 8001 --reload --reload-delay 0.5 --reload-dir /app/src
     networks:
       - insightgenie_network
 
@@ -134,12 +153,14 @@ services:
       context: .
       dockerfile: docker/Dockerfile.frontend
     container_name: insightgenie_frontend
+    restart: unless-stopped
     environment:
       ENVIRONMENT: development
       DEBUG: "true"
       BACKEND_URL: http://middleware:8001
       STREAMLIT_SERVER_PORT: 8501
       STREAMLIT_SERVER_ADDRESS: 0.0.0.0
+      STREAMLIT_LOGGER_LEVEL: info
       LOG_LEVEL: INFO
     ports:
       - "8501:8501"
@@ -149,7 +170,7 @@ services:
     volumes:
       - ./frontend:/app
       - ./logs:/app/logs
-    command: streamlit run src/main.py --server.port 8501 --server.address 0.0.0.0 --logger.level=info
+    command: streamlit run src/main.py --server.port 8501 --server.address 0.0.0.0 --logger.level=info --client.toolbarMode=viewer
     networks:
       - insightgenie_network
 

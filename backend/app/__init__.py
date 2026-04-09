@@ -1,1 +1,1 @@
-"""InsightGenie AI Backend Application."""\n
+"""InsightGenie AI Backend Application."""

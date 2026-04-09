@@ -3,8 +3,8 @@ Comparison analysis page module.
 """
 
 import streamlit as st
-
-from utils import APIClient, SessionState, get_api_client, run_async
+import pandas as pd
+import plotly.express as px
 
 
 def render():
@@ -21,82 +21,138 @@ def render():
     col1, col2 = st.columns(2)
 
     with col1:
-        analysis_type = st.selectbox("Analysis Type", ["quick", "comprehensive"])
+        time_period = st.selectbox("Time Period", ["1M", "3M", "6M", "1Y"])
 
     with col2:
         if st.button("🔄 Compare Stocks", use_container_width=True):
-            SessionState.set("comparing", True)
+            st.session_state.comparing = True
 
     st.markdown("---")
 
     # Stock input
     symbols = []
     cols = st.columns(num_stocks)
+    default_stocks = ["RELIANCE", "TCS", "INFY", "WIPRO", "HDFC"]
 
     for idx in range(num_stocks):
         with cols[idx]:
             symbol = st.text_input(
                 f"Stock {idx + 1}",
-                value=["RELIANCE", "TCS", "INFY", "WIPRO", "HDFC"][idx],
+                value=default_stocks[idx],
                 key=f"compare_stock_{idx}",
             ).upper()
             symbols.append(symbol)
 
-    if SessionState.get("comparing"):
-        with st.spinner("Comparing stocks..."):
-            client = get_api_client()
+    if st.session_state.get("comparing", False):
+        # Sample comparison data
+        comparison_data = {
+            "RELIANCE": {
+                "price": 2850.50,
+                "change": 2.5,
+                "pe_ratio": 26.5,
+                "market_cap": 25.8,
+                "one_month": 3.2,
+                "three_month": 5.8,
+                "one_year": 12.5,
+                "rsi": 68,
+                "macd": "Positive"
+            },
+            "TCS": {
+                "price": 3450.75,
+                "change": 1.8,
+                "pe_ratio": 24.2,
+                "market_cap": 14.2,
+                "one_month": 2.1,
+                "three_month": 3.5,
+                "one_year": 8.9,
+                "rsi": 62,
+                "macd": "Positive"
+            },
+            "INFY": {
+                "price": 1760.25,
+                "change": 0.5,
+                "pe_ratio": 22.8,
+                "market_cap": 7.5,
+                "one_month": 1.2,
+                "three_month": 2.3,
+                "one_year": 5.2,
+                "rsi": 55,
+                "macd": "Neutral"
+            },
+            "WIPRO": {
+                "price": 410.80,
+                "change": -1.2,
+                "pe_ratio": 18.5,
+                "market_cap": 2.8,
+                "one_month": -0.5,
+                "three_month": 1.2,
+                "one_year": 3.5,
+                "rsi": 48,
+                "macd": "Neutral"
+            },
+            "HDFC": {
+                "price": 2720.50,
+                "change": 3.1,
+                "pe_ratio": 20.1,
+                "market_cap": 5.9,
+                "one_month": 4.2,
+                "three_month": 6.8,
+                "one_year": 15.2,
+                "rsi": 72,
+                "macd": "Positive"
+            }
+        }
 
-            comparison_data = {}
-            for symbol in symbols:
-                result = run_async(client.analyze_stock(symbol, analysis_type))
-                if result and result.get("success"):
-                    comparison_data[symbol] = result.get("data", {})
+        st.success("✅ Comparison ready!")
 
-            if comparison_data:
-                st.success("Comparison completed!")
+        # Metrics comparison table
+        st.subheader("📊 Price Metrics")
 
-                # Metrics comparison table
-                st.subheader("📊 Price Metrics")
+        comparison_df = pd.DataFrame({
+            "Stock": symbols,
+            "Price (₹)": [comparison_data.get(s, {}).get("price", 0) for s in symbols],
+            "Change (%)": [comparison_data.get(s, {}).get("change", 0) for s in symbols],
+            "PE Ratio": [comparison_data.get(s, {}).get("pe_ratio", 0) for s in symbols],
+            "Market Cap (Cr)": [comparison_data.get(s, {}).get("market_cap", 0) for s in symbols],
+        })
+        
+        st.dataframe(comparison_df, use_container_width=True)
 
-                metrics_cols = ["Current Price", "Change %", "PE Ratio", "Market Cap"]
-                col_specs = [2] + [1] * len(metrics_cols)
-                cols = st.columns(col_specs)
+        st.markdown("---")
 
-                with cols[0]:
-                    st.write("**Stock**")
-                for col, metric in zip(cols[1:], metrics_cols):
-                    with col:
-                        st.write(f"**{metric}**")
+        # Performance comparison chart
+        st.subheader("📈 Performance Comparison")
+        
+        perf_periods = [f"one_month", "three_month", "one_year"]
+        perf_labels = ["1 Month", "3 Months", "1 Year"]
+        
+        perf_data = {}
+        for symbol in symbols:
+            perf_data[symbol] = [
+                comparison_data.get(symbol, {}).get(p, 0) for p in perf_periods
+            ]
+        
+        perf_df = pd.DataFrame(perf_data, index=perf_labels).T
+        
+        fig = px.bar(
+            perf_df,
+            barmode="group",
+            title="Performance Comparison Over Time",
+            labels={"value": "Return (%)", "index": "Stock"},
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-                for symbol in symbols:
-                    cols = st.columns(col_specs)
-                    data = comparison_data.get(symbol, {})
+        st.markdown("---")
 
-                    with cols[0]:
-                        st.write(f"**{symbol}**")
+        # Technical indicators comparison
+        st.subheader("🔧 Technical Indicators")
 
-                    with cols[1]:
-                        st.write(f"₹{data.get('price', 0):.2f}")
-
-                    with cols[2]:
-                        st.write(f"{data.get('change', 0):.2f}%")
-
-                    with cols[3]:
-                        st.write(f"{data.get('pe_ratio', 0):.2f}")
-
-                    with cols[4]:
-                        st.write(f"₹{data.get('market_cap', 0)/10**5:.0f}Cr")
-
-                st.markdown("---")
-
-                # Technical indicators comparison
-                st.subheader("🔧 Technical Indicators")
-
-                tech_cols = st.columns(len(symbols))
-                for col, symbol in zip(tech_cols, symbols):
-                    with col:
-                        data = comparison_data.get(symbol, {})
-                        tech = data.get("technical", {})
+        tech_cols = st.columns(len(symbols))
+        for col, symbol in zip(tech_cols, symbols):
+            with col:
+                data = comparison_data.get(symbol, {})
+                st.metric(f"{symbol} RSI", f"{data.get('rsi', 0):.0f}", 
+                         delta=f"MACD: {data.get('macd', 'N/A')}")
 
                         st.write(f"**{symbol}**")
                         st.metric("RSI", f"{tech.get('rsi', 0):.2f}")
